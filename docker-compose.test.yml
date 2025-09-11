@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  test_db:
+    image: postgres:14-alpine
+    container_name: property_api_test_db
+    environment:
+      POSTGRES_DB: ${TEST_POSTGRES_DB:-property_listings_test}
+      POSTGRES_USER: ${TEST_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${TEST_POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TEST_POSTGRES_USER:-postgres} -d ${TEST_POSTGRES_DB:-property_listings_test}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - test_network
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  test_api:
+    build: .
+    container_name: property_api_test_app
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${TEST_POSTGRES_USER:-postgres}:${TEST_POSTGRES_PASSWORD:-postgres}@test_db:5432/${TEST_POSTGRES_DB:-property_listings_test}
+      JWT_SECRET_KEY: ${TEST_JWT_SECRET_KEY:-test-secret-key}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      UPLOAD_DIR: ${TEST_UPLOAD_DIR:-/app/test_uploads}
+      ENVIRONMENT: testing
+      TESTING: true
+    volumes:
+      - ./app:/app/app:ro
+      - ./tests:/app/tests:ro
+      - test_uploads_data:/app/test_uploads
+    depends_on:
+      test_db:
+        condition: service_healthy
+    networks:
+      - test_network
+    command: ["python", "-m", "pytest", "tests/", "-v", "--tb=short"]
+
+volumes:
+  test_uploads_data:
+    driver: local
+
+networks:
+  test_network:
+    driver: bridge
