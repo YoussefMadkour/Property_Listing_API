@@ -324,7 +324,7 @@ async def delete_property(
 )
 async def advanced_search(
     search_filters: PropertySearchFilters,
-    current_user: Optional[User] = Depends(get_current_active_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
     property_service: PropertyService = Depends(get_property_service)
 ) -> PropertyListResponse:
     """
@@ -384,7 +384,7 @@ async def get_nearby_properties(
     radius_km: float = Query(5.0, gt=0, le=100, description="Search radius in kilometers"),
     limit: int = Query(20, ge=1, le=100, description="Maximum number of properties"),
     property_type: Optional[str] = Query(None, description="Property type filter"),
-    current_user: Optional[User] = Depends(get_current_active_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
     property_service: PropertyService = Depends(get_property_service)
 ) -> List[PropertyResponse]:
     """
