@@ -44,8 +44,8 @@ class Settings(BaseSettings):
     jwt_refresh_token_expire_days: int = 7
     
     # File upload configuration - Docker volume compatible
-    upload_dir: str = "/app/uploads"
-    test_upload_dir: str = "/app/test_uploads"
+    upload_dir: str = "./uploads"
+    test_upload_dir: str = "./test_uploads"
     max_file_size: int = 10 * 1024 * 1024  # 10MB
     allowed_file_types: List[str] = ["image/jpeg", "image/png", "image/webp"]
     
@@ -123,24 +123,11 @@ class Settings(BaseSettings):
         """Get test database URL."""
         return f"postgresql+asyncpg://{self.test_postgres_user}:{self.test_postgres_password}@{self.test_postgres_host}:{self.test_postgres_port}/{self.test_postgres_db}"
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-        
-        # Field aliases for environment variables
-        fields = {
-            "postgres_db": {"env": "POSTGRES_DB"},
-            "postgres_user": {"env": "POSTGRES_USER"},
-            "postgres_password": {"env": "POSTGRES_PASSWORD"},
-            "postgres_host": {"env": "POSTGRES_HOST"},
-            "postgres_port": {"env": "POSTGRES_PORT"},
-            "test_postgres_db": {"env": "TEST_POSTGRES_DB"},
-            "test_postgres_user": {"env": "TEST_POSTGRES_USER"},
-            "test_postgres_password": {"env": "TEST_POSTGRES_PASSWORD"},
-            "test_postgres_host": {"env": "TEST_POSTGRES_HOST"},
-            "test_postgres_port": {"env": "TEST_POSTGRES_PORT"},
-        }
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "case_sensitive": False,
+    }
 
 
 @lru_cache()

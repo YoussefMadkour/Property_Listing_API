@@ -3,13 +3,16 @@ FastAPI application entry point.
 Main application setup and configuration.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 
 from app.config import settings
 from app.database import test_database_connection, close_db_connection
+from app.routers import auth_router
+from app.utils.exceptions import APIException
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -58,6 +61,58 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include API routers
+app.include_router(auth_router, prefix=settings.api_v1_prefix)
+
+
+# Global exception handlers
+@app.exception_handler(APIException)
+async def api_exception_handler(request: Request, exc: APIException):
+    """Handle custom API exceptions with structured error responses."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": exc.error_code or "API_ERROR",
+                "message": exc.detail,
+                "status_code": exc.status_code
+            }
+        },
+        headers=exc.headers
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Handle FastAPI HTTP exceptions with structured error responses."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": "HTTP_ERROR",
+                "message": exc.detail,
+                "status_code": exc.status_code
+            }
+        },
+        headers=exc.headers
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle unexpected exceptions."""
+    logger.error(f"Unexpected error: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": "An unexpected error occurred",
+                "status_code": 500
+            }
+        }
+    )
 
 
 @app.get("/")
