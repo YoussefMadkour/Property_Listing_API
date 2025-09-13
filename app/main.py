@@ -6,7 +6,10 @@ Main application setup and configuration.
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
+from sqlalchemy.exc import SQLAlchemyError
+from pydantic import ValidationError as PydanticValidationError
 import logging
 
 from app.config import settings
@@ -14,6 +17,8 @@ from app.database import test_database_connection, close_db_connection
 from app.routers import auth_router, properties_router
 from app.routers.images import router as images_router
 from app.utils.exceptions import APIException
+from app.services.error_handler import ErrorHandlerService
+from app.middleware.validation import ValidationMiddleware, RequestValidationMiddleware
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -63,59 +68,57 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add validation middleware
+app.add_middleware(
+    ValidationMiddleware,
+    max_request_size=10 * 1024 * 1024,  # 10MB
+    enable_request_logging=settings.debug,
+    enable_rate_limiting=False  # Can be enabled in production
+)
+
+app.add_middleware(RequestValidationMiddleware)
+
 # Include API routers
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(properties_router, prefix=settings.api_v1_prefix)
 app.include_router(images_router, prefix=settings.api_v1_prefix)
 
 
-# Global exception handlers
+# Global exception handlers using ErrorHandlerService
 @app.exception_handler(APIException)
 async def api_exception_handler(request: Request, exc: APIException):
     """Handle custom API exceptions with structured error responses."""
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "error": {
-                "code": exc.error_code or "API_ERROR",
-                "message": exc.detail,
-                "status_code": exc.status_code
-            }
-        },
-        headers=exc.headers
-    )
+    return ErrorHandlerService.handle_api_exception(exc, request)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle FastAPI request validation errors with detailed field information."""
+    return ErrorHandlerService.handle_validation_error(exc, request)
+
+
+@app.exception_handler(PydanticValidationError)
+async def pydantic_validation_exception_handler(request: Request, exc: PydanticValidationError):
+    """Handle Pydantic validation errors with detailed field information."""
+    return ErrorHandlerService.handle_validation_error(exc, request)
+
+
+@app.exception_handler(SQLAlchemyError)
+async def database_exception_handler(request: Request, exc: SQLAlchemyError):
+    """Handle database errors with appropriate error responses."""
+    return ErrorHandlerService.handle_database_error(exc, request)
 
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Handle FastAPI HTTP exceptions with structured error responses."""
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "error": {
-                "code": "HTTP_ERROR",
-                "message": exc.detail,
-                "status_code": exc.status_code
-            }
-        },
-        headers=exc.headers
-    )
+    return ErrorHandlerService.handle_http_exception(exc, request)
 
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    """Handle unexpected exceptions."""
-    logger.error(f"Unexpected error: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": {
-                "code": "INTERNAL_SERVER_ERROR",
-                "message": "An unexpected error occurred",
-                "status_code": 500
-            }
-        }
-    )
+    """Handle unexpected exceptions with secure error responses."""
+    return ErrorHandlerService.handle_unexpected_error(exc, request)
 
 
 @app.get("/")

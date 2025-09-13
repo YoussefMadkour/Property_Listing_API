@@ -34,6 +34,7 @@ from app.utils.exceptions import (
     BadRequestError,
     InsufficientPermissionsError
 )
+from app.schemas.error import get_crud_error_responses, get_common_error_responses
 
 
 router = APIRouter(prefix="/properties", tags=["Properties"])
@@ -44,7 +45,8 @@ router = APIRouter(prefix="/properties", tags=["Properties"])
     response_model=PropertyResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create new property",
-    description="Create a new property listing. Requires agent or admin role."
+    description="Create a new property listing. Requires agent or admin role.",
+    responses=get_crud_error_responses()
 )
 async def create_property(
     property_data: PropertyCreate,

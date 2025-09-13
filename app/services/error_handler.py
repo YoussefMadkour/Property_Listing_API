@@ -3,9 +3,10 @@ Error handling service for consistent error response formatting and logging.
 Provides centralized error handling with structured responses and appropriate logging.
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from pydantic import ValidationError as PydanticValidationError
 from app.utils.exceptions import APIException, ValidationError
@@ -100,14 +101,14 @@ class ErrorHandlerService:
     
     @staticmethod
     def handle_validation_error(
-        exception: PydanticValidationError,
+        exception: Union[PydanticValidationError, RequestValidationError],
         request: Optional[Request] = None
     ) -> JSONResponse:
         """
-        Handle Pydantic validation errors with detailed field information.
+        Handle Pydantic and FastAPI validation errors with detailed field information.
         
         Args:
-            exception: Pydantic validation error
+            exception: Pydantic or FastAPI validation error
             request: Optional FastAPI request object
             
         Returns:
