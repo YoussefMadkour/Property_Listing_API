@@ -112,15 +112,15 @@ class InternalServerError(APIException):
 class InvalidCredentialsError(UnauthorizedError):
     """Invalid login credentials exception."""
     
-    def __init__(self):
-        super().__init__("Invalid email or password")
+    def __init__(self, detail: str = "Invalid email or password"):
+        super().__init__(detail)
 
 
 class TokenExpiredError(UnauthorizedError):
     """JWT token expired exception."""
     
-    def __init__(self):
-        super().__init__("Token has expired")
+    def __init__(self, detail: str = "Token has expired"):
+        super().__init__(detail)
 
 
 class InvalidTokenError(UnauthorizedError):
@@ -133,8 +133,8 @@ class InvalidTokenError(UnauthorizedError):
 class InactiveUserError(ForbiddenError):
     """Inactive user account exception."""
     
-    def __init__(self):
-        super().__init__("User account is inactive")
+    def __init__(self, detail: str = "User account is inactive"):
+        super().__init__(detail)
 
 
 class InsufficientPermissionsError(ForbiddenError):
@@ -142,3 +142,98 @@ class InsufficientPermissionsError(ForbiddenError):
     
     def __init__(self, action: str):
         super().__init__(f"Insufficient permissions to {action}")
+
+
+# Property specific exceptions
+class PropertyNotFoundError(NotFoundError):
+    """Property not found exception."""
+    
+    def __init__(self, property_id: str):
+        super().__init__("Property", property_id)
+
+
+class PropertyOwnershipError(ForbiddenError):
+    """Property ownership violation exception."""
+    
+    def __init__(self, detail: str = "You don't own this property"):
+        super().__init__(detail)
+
+
+class PropertyStatusError(BadRequestError):
+    """Property status error exception."""
+    
+    def __init__(self, detail: str):
+        super().__init__(detail)
+
+
+# Business rule exceptions
+class BusinessRuleViolationError(BadRequestError):
+    """Business rule violation exception."""
+    
+    def __init__(self, rule: str, detail: Optional[str] = None):
+        message = f"Business rule violation: {rule}"
+        if detail:
+            message += f" - {detail}"
+        super().__init__(message)
+
+
+class ResourceLimitExceededError(BadRequestError):
+    """Resource limit exceeded exception."""
+    
+    def __init__(self, resource: str, limit: int):
+        super().__init__(f"{resource} limit exceeded (maximum: {limit})")
+
+
+class DuplicateResourceError(ConflictError):
+    """Duplicate resource exception."""
+    
+    def __init__(self, resource: str, identifier: str):
+        super().__init__(f"{resource} with identifier '{identifier}' already exists")
+
+
+# File upload exceptions
+class FileUploadError(BadRequestError):
+    """File upload error exception."""
+    
+    def __init__(self, detail: str):
+        super().__init__(f"File upload error: {detail}")
+
+
+class UnsupportedFileTypeError(BadRequestError):
+    """Unsupported file type exception."""
+    
+    def __init__(self, file_type: str, supported_types: List[str]):
+        supported = ", ".join(supported_types)
+        super().__init__(f"Unsupported file type '{file_type}'. Supported types: {supported}")
+
+
+class FileSizeExceededError(BadRequestError):
+    """File size exceeded exception."""
+    
+    def __init__(self, size: int, max_size: int):
+        super().__init__(f"File size {size} bytes exceeds maximum allowed size {max_size} bytes")
+
+
+# Rate limiting exceptions
+class RateLimitExceededError(APIException):
+    """Rate limit exceeded exception."""
+    
+    def __init__(self, retry_after: int):
+        super().__init__(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded",
+            error_code="RATE_LIMIT_EXCEEDED",
+            headers={"Retry-After": str(retry_after)}
+        )
+
+
+# Service unavailable exceptions
+class ServiceUnavailableError(APIException):
+    """Service unavailable exception."""
+    
+    def __init__(self, detail: str = "Service temporarily unavailable"):
+        super().__init__(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=detail,
+            error_code="SERVICE_UNAVAILABLE"
+        )

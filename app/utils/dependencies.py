@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.services.auth import AuthService
+from app.services.property import PropertyService
 from app.utils.exceptions import (
     UnauthorizedError,
     InvalidTokenError,
@@ -36,6 +37,19 @@ async def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
         AuthService instance
     """
     return AuthService(db)
+
+
+async def get_property_service(db: AsyncSession = Depends(get_db)) -> PropertyService:
+    """
+    Get property service instance.
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        PropertyService instance
+    """
+    return PropertyService(db)
 
 
 async def get_current_user(

@@ -11,7 +11,7 @@ import logging
 
 from app.config import settings
 from app.database import test_database_connection, close_db_connection
-from app.routers import auth_router
+from app.routers import auth_router, properties_router
 from app.utils.exceptions import APIException
 
 # Configure logging
@@ -64,6 +64,7 @@ app.add_middleware(
 
 # Include API routers
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
+app.include_router(properties_router, prefix=settings.api_v1_prefix)
 
 
 # Global exception handlers
