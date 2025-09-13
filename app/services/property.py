@@ -221,11 +221,16 @@ class PropertyService:
             # Validate business rules for deletion
             await self._validate_property_deletion_rules(existing_property, current_user)
             
-            # Delete property (will cascade to images)
-            deleted = await self.property_repo.delete_property_with_images(property_id)
+            # Delete associated images first (files and database records)
+            from app.services.image import ImageService
+            image_service = ImageService(self.db_session)
+            deleted_images_count = await image_service.delete_property_images(property_id)
+            
+            # Delete property (database record)
+            deleted = await self.property_repo.delete(property_id)
             
             if deleted:
-                logger.info(f"Property deleted by user {current_user.email}: {property_id}")
+                logger.info(f"Property deleted by user {current_user.email}: {property_id} (with {deleted_images_count} images)")
             
             return deleted
             
