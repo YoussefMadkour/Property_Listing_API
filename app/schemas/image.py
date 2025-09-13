@@ -3,7 +3,7 @@ Pydantic schemas for property image requests and responses.
 Handles image upload, metadata, and validation.
 """
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -69,7 +69,8 @@ class PropertyImageCreate(PropertyImageBase):
         example=1080
     )
     
-    @validator('mime_type')
+    @field_validator('mime_type')
+    @classmethod
     def validate_mime_type(cls, v):
         """Validate MIME type."""
         allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
@@ -77,7 +78,8 @@ class PropertyImageCreate(PropertyImageBase):
             raise ValueError(f"MIME type must be one of: {', '.join(allowed_types)}")
         return v
     
-    @validator('file_size')
+    @field_validator('file_size')
+    @classmethod
     def validate_file_size(cls, v):
         """Validate file size (max 10MB)."""
         max_size = 10 * 1024 * 1024  # 10MB in bytes
@@ -429,7 +431,8 @@ class ImageFilters(BaseModel):
         example="asc"
     )
     
-    @validator('sort_by')
+    @field_validator('sort_by')
+    @classmethod
     def validate_sort_by(cls, v):
         """Validate sort field."""
         allowed_fields = ['upload_date', 'file_size', 'display_order', 'filename']
@@ -437,7 +440,8 @@ class ImageFilters(BaseModel):
             raise ValueError(f"Sort field must be one of: {', '.join(allowed_fields)}")
         return v
     
-    @validator('sort_order')
+    @field_validator('sort_order')
+    @classmethod
     def validate_sort_order(cls, v):
         """Validate sort order."""
         if v.lower() not in ['asc', 'desc']:

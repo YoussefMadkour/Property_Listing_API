@@ -3,7 +3,7 @@ Pydantic schemas for user requests and responses.
 Handles user creation, updates, and validation with email validation.
 """
 
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 from app.models.user import UserRole
@@ -26,12 +26,14 @@ class UserBase(BaseModel):
         example="John Doe"
     )
     
-    @validator('email')
+    @field_validator('email')
+    @classmethod
     def normalize_email(cls, v):
         """Normalize email to lowercase."""
         return v.lower().strip()
     
-    @validator('full_name')
+    @field_validator('full_name')
+    @classmethod
     def validate_full_name(cls, v):
         """Validate and clean full name."""
         if not v or not v.strip():
@@ -62,7 +64,8 @@ class UserCreate(UserBase):
         example="agent"
     )
     
-    @validator('password')
+    @field_validator('password')
+    @classmethod
     def validate_password(cls, v):
         """Validate password strength."""
         if len(v) < 8:
@@ -81,7 +84,7 @@ class UserCreate(UserBase):
         return v
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "email": "agent@example.com",
                 "full_name": "John Doe",
@@ -123,14 +126,16 @@ class UserUpdate(BaseModel):
         description="Whether the user account is active (admin only)"
     )
     
-    @validator('email')
+    @field_validator('email')
+    @classmethod
     def normalize_email(cls, v):
         """Normalize email to lowercase."""
         if v is not None:
             return v.lower().strip()
         return v
     
-    @validator('full_name')
+    @field_validator('full_name')
+    @classmethod
     def validate_full_name(cls, v):
         """Validate and clean full name."""
         if v is not None:
@@ -145,7 +150,8 @@ class UserUpdate(BaseModel):
             return v.strip()
         return v
     
-    @validator('password')
+    @field_validator('password')
+    @classmethod
     def validate_password(cls, v):
         """Validate password strength."""
         if v is not None:
@@ -165,7 +171,7 @@ class UserUpdate(BaseModel):
         return v
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "full_name": "John Smith",
                 "email": "johnsmith@example.com"
@@ -325,7 +331,8 @@ class UserFilters(BaseModel):
         example="asc"
     )
     
-    @validator('sort_by')
+    @field_validator('sort_by')
+    @classmethod
     def validate_sort_by(cls, v):
         """Validate sort field."""
         allowed_fields = ['created_at', 'updated_at', 'email', 'full_name', 'role']
@@ -333,7 +340,8 @@ class UserFilters(BaseModel):
             raise ValueError(f"Sort field must be one of: {', '.join(allowed_fields)}")
         return v
     
-    @validator('sort_order')
+    @field_validator('sort_order')
+    @classmethod
     def validate_sort_order(cls, v):
         """Validate sort order."""
         if v.lower() not in ['asc', 'desc']:
@@ -341,7 +349,7 @@ class UserFilters(BaseModel):
         return v.lower()
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "role": "agent",
                 "is_active": True,
@@ -412,7 +420,8 @@ class PasswordChangeRequest(BaseModel):
         example="newpassword123"
     )
     
-    @validator('new_password')
+    @field_validator('new_password')
+    @classmethod
     def validate_new_password(cls, v):
         """Validate new password strength."""
         if len(v) < 8:
@@ -430,15 +439,16 @@ class PasswordChangeRequest(BaseModel):
         
         return v
     
-    @validator('confirm_password')
-    def passwords_match(cls, v, values):
+    @field_validator('confirm_password')
+    @classmethod
+    def passwords_match(cls, v, info):
         """Validate that passwords match."""
-        if 'new_password' in values and v != values['new_password']:
+        if 'new_password' in info.data and v != info.data['new_password']:
             raise ValueError("Passwords do not match")
         return v
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "current_password": "currentpassword123",
                 "new_password": "newpassword123",

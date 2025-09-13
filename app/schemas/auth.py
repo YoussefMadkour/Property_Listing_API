@@ -3,7 +3,7 @@ Pydantic schemas for authentication requests and responses.
 Handles login, token refresh, and user authentication data validation.
 """
 
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
 from datetime import datetime
 from app.models.user import UserRole
@@ -26,7 +26,8 @@ class LoginRequest(BaseModel):
         example="securepassword123"
     )
     
-    @validator('email')
+    @field_validator('email')
+    @classmethod
     def normalize_email(cls, v):
         """Normalize email to lowercase."""
         return v.lower().strip()
@@ -87,50 +88,7 @@ class AccessTokenResponse(BaseModel):
     )
 
 
-class UserResponse(BaseModel):
-    """User response schema (excluding sensitive data)."""
-    
-    id: str = Field(
-        ...,
-        description="User's unique identifier",
-        example="123e4567-e89b-12d3-a456-426614174000"
-    )
-    email: EmailStr = Field(
-        ...,
-        description="User's email address",
-        example="agent@example.com"
-    )
-    full_name: str = Field(
-        ...,
-        description="User's full name",
-        example="John Doe"
-    )
-    role: UserRole = Field(
-        ...,
-        description="User's role",
-        example="agent"
-    )
-    is_active: bool = Field(
-        ...,
-        description="Whether the user account is active",
-        example=True
-    )
-    created_at: datetime = Field(
-        ...,
-        description="Account creation timestamp",
-        example="2023-01-01T00:00:00Z"
-    )
-    updated_at: datetime = Field(
-        ...,
-        description="Last update timestamp",
-        example="2023-01-01T00:00:00Z"
-    )
-    
-    class Config:
-        from_attributes = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+
 
 
 class CurrentUserResponse(UserResponse):
@@ -142,10 +100,11 @@ class CurrentUserResponse(UserResponse):
         example=["create_property", "update_own_property", "delete_own_property"]
     )
     
-    @validator('permissions', pre=True, always=True)
-    def set_permissions(cls, v, values):
+    @field_validator('permissions', mode='before')
+    @classmethod
+    def set_permissions(cls, v, info):
         """Set permissions based on user role."""
-        role = values.get('role')
+        role = info.data.get('role') if info.data else None
         if role == UserRole.ADMIN:
             return [
                 "create_property",

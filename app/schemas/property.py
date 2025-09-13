@@ -3,7 +3,7 @@ Pydantic schemas for property requests and responses.
 Handles property CRUD operations, search filters, and validation.
 """
 
-from pydantic import BaseModel, Field, validator, root_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
@@ -40,8 +40,6 @@ class PropertyBase(BaseModel):
     price: Decimal = Field(
         ...,
         gt=0,
-        max_digits=12,
-        decimal_places=2,
         description="Property price in local currency",
         example=2500.00
     )
@@ -82,8 +80,6 @@ class PropertyBase(BaseModel):
         None,
         ge=-90,
         le=90,
-        max_digits=10,
-        decimal_places=8,
         description="Property latitude coordinate",
         example=25.2048493
     )
@@ -92,34 +88,36 @@ class PropertyBase(BaseModel):
         None,
         ge=-180,
         le=180,
-        max_digits=11,
-        decimal_places=8,
         description="Property longitude coordinate",
         example=55.2707828
     )
     
-    @validator('title')
+    @field_validator('title')
+    @classmethod
     def validate_title(cls, v):
         """Validate and clean title."""
         if not v or not v.strip():
             raise ValueError("Title cannot be empty")
         return v.strip()
     
-    @validator('description')
+    @field_validator('description')
+    @classmethod
     def validate_description(cls, v):
         """Validate and clean description."""
         if not v or not v.strip():
             raise ValueError("Description cannot be empty")
         return v.strip()
     
-    @validator('location')
+    @field_validator('location')
+    @classmethod
     def validate_location(cls, v):
         """Validate and clean location."""
         if not v or not v.strip():
             raise ValueError("Location cannot be empty")
         return v.strip()
     
-    @validator('price')
+    @field_validator('price')
+    @classmethod
     def validate_price(cls, v):
         """Validate price value."""
         if v <= 0:
@@ -128,23 +126,19 @@ class PropertyBase(BaseModel):
             raise ValueError("Price exceeds maximum allowed value")
         return v
     
-    @root_validator
-    def validate_coordinates(cls, values):
+    @model_validator(mode='after')
+    def validate_coordinates(self):
         """Validate that both coordinates are provided together or both are None."""
-        latitude = values.get('latitude')
-        longitude = values.get('longitude')
-        
-        if (latitude is None) != (longitude is None):
+        if (self.latitude is None) != (self.longitude is None):
             raise ValueError("Both latitude and longitude must be provided together, or both must be None")
-        
-        return values
+        return self
 
 
 class PropertyCreate(PropertyBase):
     """Schema for creating a new property."""
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "title": "Beautiful 3BR Apartment in Downtown",
                 "description": "Spacious apartment with modern amenities, great location near shopping and transport. Features include hardwood floors, updated kitchen, and balcony with city views.",
@@ -185,8 +179,6 @@ class PropertyUpdate(BaseModel):
     price: Optional[Decimal] = Field(
         None,
         gt=0,
-        max_digits=12,
-        decimal_places=2,
         description="Property price in local currency"
     )
     
@@ -222,8 +214,6 @@ class PropertyUpdate(BaseModel):
         None,
         ge=-90,
         le=90,
-        max_digits=10,
-        decimal_places=8,
         description="Property latitude coordinate"
     )
     
@@ -231,8 +221,6 @@ class PropertyUpdate(BaseModel):
         None,
         ge=-180,
         le=180,
-        max_digits=11,
-        decimal_places=8,
         description="Property longitude coordinate"
     )
     
@@ -241,7 +229,8 @@ class PropertyUpdate(BaseModel):
         description="Whether the property listing is active"
     )
     
-    @validator('title')
+    @field_validator('title')
+    @classmethod
     def validate_title(cls, v):
         """Validate and clean title."""
         if v is not None:
@@ -250,7 +239,8 @@ class PropertyUpdate(BaseModel):
             return v.strip()
         return v
     
-    @validator('description')
+    @field_validator('description')
+    @classmethod
     def validate_description(cls, v):
         """Validate and clean description."""
         if v is not None:
@@ -259,7 +249,8 @@ class PropertyUpdate(BaseModel):
             return v.strip()
         return v
     
-    @validator('location')
+    @field_validator('location')
+    @classmethod
     def validate_location(cls, v):
         """Validate and clean location."""
         if v is not None:
@@ -268,7 +259,8 @@ class PropertyUpdate(BaseModel):
             return v.strip()
         return v
     
-    @validator('price')
+    @field_validator('price')
+    @classmethod
     def validate_price(cls, v):
         """Validate price value."""
         if v is not None:
@@ -278,21 +270,17 @@ class PropertyUpdate(BaseModel):
                 raise ValueError("Price exceeds maximum allowed value")
         return v
     
-    @root_validator
-    def validate_coordinates(cls, values):
+    @model_validator(mode='after')
+    def validate_coordinates(self):
         """Validate that both coordinates are provided together or both are None."""
-        latitude = values.get('latitude')
-        longitude = values.get('longitude')
-        
         # Only validate if at least one coordinate is provided
-        if latitude is not None or longitude is not None:
-            if (latitude is None) != (longitude is None):
+        if self.latitude is not None or self.longitude is not None:
+            if (self.latitude is None) != (self.longitude is None):
                 raise ValueError("Both latitude and longitude must be provided together, or both must be None")
-        
-        return values
+        return self
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "title": "Updated Beautiful 3BR Apartment",
                 "price": 2750.00,
@@ -433,8 +421,6 @@ class PropertySearchFilters(BaseModel):
     min_price: Optional[Decimal] = Field(
         None,
         ge=0,
-        max_digits=12,
-        decimal_places=2,
         description="Minimum price filter",
         example=1000.00
     )
@@ -442,8 +428,6 @@ class PropertySearchFilters(BaseModel):
     max_price: Optional[Decimal] = Field(
         None,
         ge=0,
-        max_digits=12,
-        decimal_places=2,
         description="Maximum price filter",
         example=5000.00
     )
@@ -531,38 +515,16 @@ class PropertySearchFilters(BaseModel):
         example="asc"
     )
     
-    @validator('min_price', 'max_price')
+    @field_validator('min_price', 'max_price')
+    @classmethod
     def validate_prices(cls, v):
         """Validate price values."""
         if v is not None and v < 0:
             raise ValueError("Price cannot be negative")
         return v
     
-    @root_validator
-    def validate_price_range(cls, values):
-        """Validate that min_price is less than max_price."""
-        min_price = values.get('min_price')
-        max_price = values.get('max_price')
-        
-        if min_price is not None and max_price is not None:
-            if min_price > max_price:
-                raise ValueError("Minimum price cannot be greater than maximum price")
-        
-        return values
-    
-    @root_validator
-    def validate_area_range(cls, values):
-        """Validate that min_area is less than max_area."""
-        min_area = values.get('min_area')
-        max_area = values.get('max_area')
-        
-        if min_area is not None and max_area is not None:
-            if min_area > max_area:
-                raise ValueError("Minimum area cannot be greater than maximum area")
-        
-        return values
-    
-    @validator('sort_by')
+    @field_validator('sort_by')
+    @classmethod
     def validate_sort_by(cls, v):
         """Validate sort field."""
         allowed_fields = ['created_at', 'updated_at', 'price', 'bedrooms', 'bathrooms', 'area_sqft', 'title']
@@ -570,15 +532,31 @@ class PropertySearchFilters(BaseModel):
             raise ValueError(f"Sort field must be one of: {', '.join(allowed_fields)}")
         return v
     
-    @validator('sort_order')
+    @field_validator('sort_order')
+    @classmethod
     def validate_sort_order(cls, v):
         """Validate sort order."""
         if v.lower() not in ['asc', 'desc']:
             raise ValueError("Sort order must be 'asc' or 'desc'")
         return v.lower()
     
+    @model_validator(mode='after')
+    def validate_ranges(self):
+        """Validate price and area ranges."""
+        # Validate price range
+        if self.min_price is not None and self.max_price is not None:
+            if self.min_price > self.max_price:
+                raise ValueError("Minimum price cannot be greater than maximum price")
+        
+        # Validate area range
+        if self.min_area is not None and self.max_area is not None:
+            if self.min_area > self.max_area:
+                raise ValueError("Minimum area cannot be greater than maximum area")
+        
+        return self
+    
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "location": "Dubai",
                 "min_price": 1000.00,
