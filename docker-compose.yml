@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:14-alpine
@@ -9,7 +7,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -47,6 +45,28 @@ services:
     networks:
       - property_network
     restart: unless-stopped
+
+  # Migration service for running database migrations
+  migrate:
+    build: .
+    container_name: property_api_migrate
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-property_listings}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    volumes:
+      - ./app:/app/app:ro
+      - ./alembic:/app/alembic:ro
+      - ./migrate.py:/app/migrate.py:ro
+      - ./alembic.ini:/app/alembic.ini:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - property_network
+    profiles:
+      - migration
+    command: ["python", "migrate.py", "migrate"]
 
 volumes:
   postgres_data:

@@ -26,9 +26,10 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Copy application code
 COPY ./app /app/app
 
-# Copy alembic files (will be created in task 3)
-# COPY ./alembic /app/alembic
-# COPY ./alembic.ini /app/
+# Copy alembic files for database migrations
+COPY ./alembic /app/alembic
+COPY ./alembic.ini /app/
+COPY ./migrate.py /app/
 
 # Create uploads directory
 RUN mkdir -p /app/uploads
