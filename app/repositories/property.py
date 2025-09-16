@@ -10,6 +10,7 @@ from app.repositories.base import BaseRepository
 from app.models.property import Property, PropertyType
 from app.models.user import User
 from app.models.image import PropertyImage
+from app.utils.query_optimizer import query_optimizer
 from typing import Optional, List, Dict, Any, Tuple
 from decimal import Decimal
 import uuid
@@ -172,6 +173,12 @@ class PropertyRepository(BaseRepository[Property]):
                 query = query.where(and_(*conditions))
                 count_query = count_query.where(and_(*conditions))
             
+            # Monitor count query performance
+            count_query_str = str(count_query.compile(compile_kwargs={"literal_binds": True}))
+            await query_optimizer.analyze_query_performance(
+                self.db, count_query_str, endpoint="/api/v1/properties/search"
+            )
+            
             # Get total count
             count_result = await self.db.execute(count_query)
             total_count = count_result.scalar()
@@ -189,6 +196,12 @@ class PropertyRepository(BaseRepository[Property]):
             
             # Apply pagination
             query = query.offset(skip).limit(limit)
+            
+            # Monitor main query performance
+            main_query_str = str(query.compile(compile_kwargs={"literal_binds": True}))
+            await query_optimizer.analyze_query_performance(
+                self.db, main_query_str, endpoint="/api/v1/properties/search"
+            )
             
             # Execute query
             result = await self.db.execute(query)

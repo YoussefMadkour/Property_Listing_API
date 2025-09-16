@@ -11,7 +11,7 @@ from app.config import settings
 import logging
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 logger = logging.getLogger(__name__)
 
@@ -19,17 +19,26 @@ logger = logging.getLogger(__name__)
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
-    # Connection pool settings optimized for Docker containers
-    pool_size=10,  # Number of connections to maintain in the pool
-    max_overflow=20,  # Additional connections that can be created on demand
+    # Enhanced connection pool settings for high performance
+    pool_size=20,  # Increased base pool size for concurrent requests
+    max_overflow=30,  # Additional connections for peak loads
     pool_pre_ping=True,  # Validate connections before use
-    pool_recycle=3600,  # Recycle connections after 1 hour
+    pool_recycle=1800,  # Recycle connections after 30 minutes (reduced for freshness)
     pool_timeout=30,  # Timeout for getting connection from pool
-    # Connection arguments for PostgreSQL
+    pool_reset_on_return='commit',  # Reset connection state on return
+    # Enhanced connection arguments for PostgreSQL performance
     connect_args={
         "server_settings": {
             "application_name": "property_listing_api",
-        }
+            "shared_preload_libraries": "pg_stat_statements",  # Enable query statistics
+            "log_statement": "none",  # Reduce logging overhead
+            "log_min_duration_statement": "1000",  # Log slow queries (1 second)
+            "effective_cache_size": "1GB",  # Optimize for container memory
+            "random_page_cost": "1.1",  # Optimize for SSD storage
+            "seq_page_cost": "1.0",  # Sequential scan cost
+        },
+        "command_timeout": 60,  # Command timeout in seconds
+        "prepared_statement_cache_size": 100,  # Cache prepared statements
     }
 )
 
@@ -208,14 +217,145 @@ async def get_database_info() -> dict:
             target_engine = test_engine if settings.is_testing and test_engine else engine
             pool = target_engine.pool
             
+            # Get database performance statistics
+            db_stats = await get_database_performance_stats(session)
+            
             return {
                 "database_version": version,
                 "pool_size": pool.size(),
                 "checked_in_connections": pool.checkedin(),
                 "checked_out_connections": pool.checkedout(),
                 "overflow_connections": pool.overflow(),
-                "invalid_connections": pool.invalidated(),
+                "invalid_connections": getattr(pool, 'invalidated', lambda: 0)(),
+                "pool_utilization": (pool.checkedout() / (pool.size() + pool.overflow())) * 100,
+                "performance_stats": db_stats
             }
     except Exception as e:
         logger.error(f"Failed to get database info: {e}")
         return {"error": str(e)}
+
+
+async def get_database_performance_stats(session: AsyncSession) -> dict:
+    """
+    Get database performance statistics.
+    
+    Args:
+        session: Database session
+        
+    Returns:
+        Dictionary with performance statistics
+    """
+    try:
+        # Get connection statistics
+        conn_stats_query = """
+        SELECT 
+            numbackends as active_connections,
+            xact_commit as transactions_committed,
+            xact_rollback as transactions_rolled_back,
+            blks_read as blocks_read,
+            blks_hit as blocks_hit,
+            tup_returned as tuples_returned,
+            tup_fetched as tuples_fetched,
+            tup_inserted as tuples_inserted,
+            tup_updated as tuples_updated,
+            tup_deleted as tuples_deleted
+        FROM pg_stat_database 
+        WHERE datname = current_database();
+        """
+        
+        result = await session.execute(text(conn_stats_query))
+        row = result.fetchone()
+        
+        if row:
+            # Calculate cache hit ratio
+            total_reads = row.blocks_read + row.blocks_hit
+            cache_hit_ratio = (row.blocks_hit / total_reads * 100) if total_reads > 0 else 0
+            
+            return {
+                "active_connections": row.active_connections,
+                "transactions_committed": row.transactions_committed,
+                "transactions_rolled_back": row.transactions_rolled_back,
+                "cache_hit_ratio": round(cache_hit_ratio, 2),
+                "blocks_read": row.blocks_read,
+                "blocks_hit": row.blocks_hit,
+                "tuples_returned": row.tuples_returned,
+                "tuples_fetched": row.tuples_fetched,
+                "tuples_inserted": row.tuples_inserted,
+                "tuples_updated": row.tuples_updated,
+                "tuples_deleted": row.tuples_deleted
+            }
+        else:
+            return {}
+    except Exception as e:
+        logger.error(f"Failed to get database performance stats: {e}")
+        return {"error": str(e)}
+
+
+async def monitor_connection_pool() -> dict:
+    """
+    Monitor connection pool health and performance.
+    
+    Returns:
+        Dictionary with connection pool monitoring data
+    """
+    try:
+        target_engine = test_engine if settings.is_testing and test_engine else engine
+        pool = target_engine.pool
+        
+        # Calculate pool metrics
+        total_capacity = pool.size() + pool.overflow()
+        utilization = (pool.checkedout() / total_capacity * 100) if total_capacity > 0 else 0
+        
+        # Determine pool health status
+        if utilization > 90:
+            status = "critical"
+        elif utilization > 75:
+            status = "warning"
+        else:
+            status = "healthy"
+        
+        return {
+            "status": status,
+            "pool_size": pool.size(),
+            "max_overflow": pool.overflow(),
+            "total_capacity": total_capacity,
+            "checked_out": pool.checkedout(),
+            "checked_in": pool.checkedin(),
+            "utilization_percent": round(utilization, 2),
+            "invalid_connections": getattr(pool, 'invalidated', lambda: 0)(),
+            "recommendations": _get_pool_recommendations(utilization, pool)
+        }
+    except Exception as e:
+        logger.error(f"Failed to monitor connection pool: {e}")
+        return {"error": str(e)}
+
+
+def _get_pool_recommendations(utilization: float, pool) -> List[str]:
+    """
+    Get recommendations for connection pool optimization.
+    
+    Args:
+        utilization: Current pool utilization percentage
+        pool: SQLAlchemy connection pool
+        
+    Returns:
+        List of optimization recommendations
+    """
+    recommendations = []
+    
+    if utilization > 90:
+        recommendations.append("Consider increasing pool_size or max_overflow")
+        recommendations.append("Monitor for connection leaks")
+        recommendations.append("Review long-running queries")
+    elif utilization > 75:
+        recommendations.append("Monitor pool utilization trends")
+        recommendations.append("Consider connection pooling optimization")
+    
+    invalid_count = getattr(pool, 'invalidated', lambda: 0)()
+    if invalid_count > 0:
+        recommendations.append("Investigate connection invalidation causes")
+    
+    if utilization < 25:
+        recommendations.append("Pool may be over-provisioned")
+    
+    return recommendations

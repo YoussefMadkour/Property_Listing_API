@@ -16,6 +16,7 @@ import time
 from app.config import settings
 from app.database import test_database_connection, close_db_connection
 from app.routers import auth_router, properties_router, images_router
+from app.routers.monitoring import router as monitoring_router
 from app.utils.exceptions import APIException
 from app.services.error_handler import ErrorHandlerService
 from app.middleware.validation import ValidationMiddleware, RequestValidationMiddleware
@@ -139,6 +140,7 @@ app.add_middleware(RequestValidationMiddleware)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(properties_router, prefix=settings.api_v1_prefix)
 app.include_router(images_router, prefix=settings.api_v1_prefix)
+app.include_router(monitoring_router, prefix=settings.api_v1_prefix)
 
 
 # Global exception handlers using ErrorHandlerService
